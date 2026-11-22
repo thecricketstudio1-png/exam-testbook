@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "Exam TestBook",
+  "short_name": "Exam TestBook",
+  "description": "Your Success, Our Mission — Bilingual CBT mock tests, daily quizzes, and deterministic exam analytics for Indian government exams.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
