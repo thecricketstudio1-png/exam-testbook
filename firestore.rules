@@ -1,0 +1,313 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Health check document used by startup testConnection()
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Reusable Hardened Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'role',
+          'activeDeviceId', 'deviceSwitchesUsed', 'deviceSwitchWindowStart',
+          'unlockedPackIds', 'activePlan',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 254
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role is string && data.role == 'student'
+        && (!('activeDeviceId' in data) || isValidId(data.activeDeviceId))
+        && (!('deviceSwitchesUsed' in data) || (data.deviceSwitchesUsed is number && data.deviceSwitchesUsed >= 0 && data.deviceSwitchesUsed <= 2))
+        && (!('deviceSwitchWindowStart' in data) || (data.deviceSwitchWindowStart is number && data.deviceSwitchWindowStart >= 0))
+        && (!('unlockedPackIds' in data) || (data.unlockedPackIds is list && data.unlockedPackIds.size() <= 200 && (data.unlockedPackIds.size() == 0 || data.unlockedPackIds[0] is string)))
+        && (!('activePlan' in data) || (data.activePlan is string && data.activePlan in ['none', 'trial', 'annual', 'mega']))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserEntitlement(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'plan', 'testId', 'amountInr', 'razorpayOrderId',
+          'razorpayPaymentId', 'verificationToken', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'plan', 'testId', 'amountInr', 'razorpayOrderId',
+          'razorpayPaymentId', 'verificationToken', 'status', 'createdAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.plan is string && data.plan in ['single', 'bundle']
+        && data.testId is string && isValidId(data.testId)
+        && data.amountInr is number
+        && ((data.plan == 'single' && data.amountInr in [39, 49]) || (data.plan == 'bundle' && data.amountInr == 299))
+        && data.razorpayOrderId is string && data.razorpayOrderId.size() >= 6 && data.razorpayOrderId.size() <= 128
+        && data.razorpayPaymentId is string && data.razorpayPaymentId.size() >= 6 && data.razorpayPaymentId.size() <= 128
+        && data.verificationToken is string && data.verificationToken.size() >= 16 && data.verificationToken.size() <= 256
+        && data.status is string && data.status == 'verified'
+        && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidUserAttempt(data, userId, attemptId) {
+      return data.keys().hasAll([
+          'uid', 'attemptId', 'testId', 'examId',
+          'testTitleEn', 'testTitleHi', 'examNameEn', 'examNameHi',
+          'score', 'maxScore', 'accuracy', 'correctCount',
+          'wrongCount', 'skippedCount', 'timeTakenSeconds', 'submittedAt', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'attemptId', 'testId', 'examId',
+          'testTitleEn', 'testTitleHi', 'examNameEn', 'examNameHi',
+          'score', 'maxScore', 'accuracy', 'correctCount',
+          'wrongCount', 'skippedCount', 'timeTakenSeconds', 'submittedAt', 'createdAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.attemptId is string && data.attemptId == attemptId && isValidId(data.attemptId)
+        && data.testId is string && data.testId.size() >= 1 && data.testId.size() <= 128
+        && data.examId is string && data.examId.size() >= 1 && data.examId.size() <= 128
+        && data.testTitleEn is string && data.testTitleEn.size() >= 1 && data.testTitleEn.size() <= 200
+        && data.testTitleHi is string && data.testTitleHi.size() >= 1 && data.testTitleHi.size() <= 200
+        && data.examNameEn is string && data.examNameEn.size() >= 1 && data.examNameEn.size() <= 200
+        && data.examNameHi is string && data.examNameHi.size() >= 1 && data.examNameHi.size() <= 200
+        && data.score is number
+        && data.maxScore is number && data.maxScore > 0
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100
+        && data.correctCount is number && data.correctCount >= 0
+        && data.wrongCount is number && data.wrongCount >= 0
+        && data.skippedCount is number && data.skippedCount >= 0
+        && data.timeTakenSeconds is number && data.timeTakenSeconds >= 0
+        && data.submittedAt is number && data.submittedAt > 0
+        && data.createdAt is timestamp && data.createdAt == request.time;
+    }
+
+    function isValidUserSubscription(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'plan', 'status', 'trialActive', 'trialUsed', 'trialExpiresAt',
+          'megaPassActive', 'megaPassExpiresAt', 'annualExpiresAt',
+          'unlockedPackIds', 'lastPaymentId', 'lastAmountInr', 'cancelledAt',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'plan', 'status', 'trialActive', 'trialUsed', 'trialExpiresAt',
+          'megaPassActive', 'megaPassExpiresAt', 'annualExpiresAt',
+          'unlockedPackIds', 'lastPaymentId', 'lastAmountInr', 'cancelledAt',
+          'autopayAmountInr', 'razorpayPlanId', 'razorpaySubscriptionId',
+          'targetType', 'targetId', 'targetLabel',
+          'createdAt', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.plan is string && data.plan in ['none', 'trial', 'annual', 'mega']
+        && data.status is string && data.status in ['inactive', 'active', 'cancelled', 'expired']
+        && data.trialActive is bool
+        && data.trialUsed is bool
+        && data.trialExpiresAt is number && data.trialExpiresAt >= 0
+        && data.megaPassActive is bool
+        && data.megaPassExpiresAt is number && data.megaPassExpiresAt >= 0
+        && data.annualExpiresAt is number && data.annualExpiresAt >= 0
+        && data.unlockedPackIds is list
+        && data.unlockedPackIds.size() <= 200
+        && (data.unlockedPackIds.size() == 0 || data.unlockedPackIds[0] is string)
+        && data.lastPaymentId is string && data.lastPaymentId.size() >= 1 && data.lastPaymentId.size() <= 128
+        && data.lastAmountInr is number && data.lastAmountInr in [0, 1, 49, 299]
+        && data.cancelledAt is number && data.cancelledAt >= 0
+        && (!('autopayAmountInr' in data) || (data.autopayAmountInr is number && data.autopayAmountInr in [0, 49, 299]))
+        && (!('razorpayPlanId' in data) || (data.razorpayPlanId is string && data.razorpayPlanId.size() >= 1 && data.razorpayPlanId.size() <= 128))
+        && (!('razorpaySubscriptionId' in data) || (data.razorpaySubscriptionId is string && data.razorpaySubscriptionId.size() >= 1 && data.razorpaySubscriptionId.size() <= 128))
+        && (!('targetType' in data) || (data.targetType is string && data.targetType in ['exam', 'category', 'all']))
+        && (!('targetId' in data) || isValidId(data.targetId))
+        && (!('targetLabel' in data) || (data.targetLabel is string && data.targetLabel.size() >= 1 && data.targetLabel.size() <= 200))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Users Profile + 1-Device Lock (PII isolated to owner only)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && (!('deviceSwitchesUsed' in incoming()) || incoming().deviceSwitchesUsed == 0)
+        && (!('unlockedPackIds' in incoming()) || incoming().unlockedPackIds.size() == 0)
+        && (!('activePlan' in incoming()) || incoming().activePlan == 'none')
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().role == existing().role
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Sync basic profile fields (email / displayName)
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'email', 'updatedAt'])
+          ||
+          // Action 2: Initial device binding for legacy profile without activeDeviceId
+          (
+            !('activeDeviceId' in existing())
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'activeDeviceId', 'deviceSwitchesUsed', 'deviceSwitchWindowStart', 'updatedAt'
+            ])
+            && incoming().deviceSwitchesUsed == 0
+          )
+          ||
+          // Action 3: Silent device refresh when no paid/trial pass or unlocked packs exist yet
+          (
+            (!('activePlan' in existing()) || existing().activePlan == 'none')
+            && (!('unlockedPackIds' in existing()) || existing().unlockedPackIds.size() == 0)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'activeDeviceId', 'deviceSwitchesUsed', 'deviceSwitchWindowStart', 'updatedAt'
+            ])
+            && incoming().deviceSwitchesUsed == 0
+          )
+          ||
+          // Action 4: 1-Device Lock Pass Transfer (max 2 switches per 30 days)
+          (
+            'activeDeviceId' in existing()
+            && incoming().activeDeviceId != existing().activeDeviceId
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'activeDeviceId', 'deviceSwitchesUsed', 'deviceSwitchWindowStart', 'updatedAt'
+            ])
+            && (
+              (
+                ('deviceSwitchWindowStart' in existing())
+                && (request.time.toMillis() - existing().deviceSwitchWindowStart) < 2592000000
+                && ('deviceSwitchesUsed' in existing())
+                && existing().deviceSwitchesUsed < 2
+                && incoming().deviceSwitchesUsed == existing().deviceSwitchesUsed + 1
+                && incoming().deviceSwitchWindowStart == existing().deviceSwitchWindowStart
+              )
+              ||
+              (
+                (!('deviceSwitchWindowStart' in existing()) || (request.time.toMillis() - existing().deviceSwitchWindowStart) >= 2592000000)
+                && incoming().deviceSwitchesUsed == 1
+              )
+            )
+          )
+          ||
+          // Action 5: Sync unlockedPackIds & activePlan after verified checkout or cancellation
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'unlockedPackIds', 'activePlan', 'activeDeviceId',
+              'deviceSwitchesUsed', 'deviceSwitchWindowStart', 'updatedAt'
+            ])
+            && (
+              !('activeDeviceId' in existing())
+              || (
+                incoming().activeDeviceId == existing().activeDeviceId
+                && (!('deviceSwitchesUsed' in existing()) || incoming().deviceSwitchesUsed == existing().deviceSwitchesUsed)
+                && (!('deviceSwitchWindowStart' in existing()) || incoming().deviceSwitchWindowStart == existing().deviceSwitchWindowStart)
+              )
+            )
+          )
+        );
+
+      allow delete: if false;
+
+      // Verified Razorpay Entitlements
+      match /entitlements/{entitlementId} {
+        allow get: if isValidId(userId) && isValidId(entitlementId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.uid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(entitlementId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && isValidUserEntitlement(incoming(), userId);
+
+        allow update, delete: if false;
+      }
+
+      // Student Mock Test Attempts
+      match /attempts/{attemptId} {
+        allow get: if isValidId(userId) && isValidId(attemptId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.uid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(attemptId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && isValidUserAttempt(incoming(), userId, attemptId);
+
+        allow update, delete: if false;
+      }
+
+      // User Subscription State (users/{userId}/subscription/current)
+      match /subscription/{subscriptionId} {
+        allow get: if isValidId(userId) && isValidId(subscriptionId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && resource.data.uid == request.auth.uid;
+
+        allow create: if isValidId(userId)
+          && isValidId(subscriptionId)
+          && subscriptionId == 'current'
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && isValidUserSubscription(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+
+        allow update: if isValidId(userId)
+          && isValidId(subscriptionId)
+          && subscriptionId == 'current'
+          && isOwner(userId)
+          && isValidUserSubscription(incoming(), userId)
+          && incoming().uid == existing().uid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            (
+              incoming().status == 'active'
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'plan', 'status', 'trialActive', 'trialUsed', 'trialExpiresAt',
+                'megaPassActive', 'megaPassExpiresAt', 'annualExpiresAt',
+                'unlockedPackIds', 'lastPaymentId', 'lastAmountInr', 'cancelledAt',
+                'autopayAmountInr', 'razorpayPlanId', 'razorpaySubscriptionId',
+                'targetType', 'targetId', 'targetLabel', 'updatedAt'
+              ])
+            )
+            ||
+            (
+              incoming().status == 'cancelled'
+              && incoming().trialActive == false
+              && incoming().megaPassActive == false
+              && incoming().cancelledAt > 0
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'plan', 'status', 'trialActive', 'megaPassActive', 'cancelledAt', 'updatedAt'
+              ])
+            )
+          );
+
+        allow delete: if false;
+      }
+    }
+  }
+}
