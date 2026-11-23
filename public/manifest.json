@@ -28,5 +28,43 @@
   "type": "image/png",
   "purpose": "maskable"
     }
+  
+  ],
+  "screenshots": [
+    {
+      "src": "/Screenshot_20261123-085014_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085022_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085029_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085040_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085045_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085219_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    },
+    {
+      "src": "/Screenshot_20261123-085311_Chrome.png",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
   ]
 }
